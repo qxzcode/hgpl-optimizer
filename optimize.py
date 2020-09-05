@@ -1,9 +1,7 @@
 from argparse import ArgumentParser
 import numpy as np
 import matplotlib.pyplot as plt
-import math
-from sklearn.neighbors import KDTree
-import itertools
+from tqdm import tqdm
 
 from util import *
 
@@ -28,9 +26,10 @@ def summarize_paths(paths, plot=True):
     up_paths = make_up_paths(paths)
     down_dist = total_length(paths)
     up_dist = total_length(up_paths)
+    total_dist = down_dist + up_dist
     print(f'pen down distance: {down_dist}')
     print(f'pen up distance:   {up_dist}')
-    print(f'total distance:    {down_dist + up_dist}')
+    print(f'total distance:    {total_dist}')
     
     if plot:
         for path, color in zip(paths, np.linspace(0, 1, len(paths))):
@@ -42,6 +41,8 @@ def summarize_paths(paths, plot=True):
         plt.axis('equal')
         plt.get_current_fig_manager().full_screen_toggle()
         plt.show()
+    
+    return total_dist
 
 
 def main(args):
@@ -68,35 +69,77 @@ def main(args):
         paths.pop()
     paths = [np.array(path) for path in paths]
     
-    summarize_paths(paths, plot=True)
+    print('=== BEFORE: ===')
+    dist_before = summarize_paths(paths, plot=True)
+    print()
     
     start_points = np.array([path[0] for path in paths])
     end_points = np.array([path[-1] for path in paths])
     
-    loops = start_points == end_points
-    loops = np.logical_and(loops[:, 0], loops[:, 1])
+    with time_block('build candidate_points'):
+        loops = start_points == end_points
+        loops = np.logical_and(loops[:, 0], loops[:, 1])
+        
+        candidate_points = []
+        candidate_path_indices = []
+        candidate_point_indices = []  # -2=start, -1=end, 0-inf=[index in loop path]
+        for i, (path, is_loop) in enumerate(zip(paths, loops)):
+            if is_loop:
+                candidate_points.append(path[:-1])
+                candidate_path_indices.append(np.full(len(path)-1, i))
+                candidate_point_indices.append(np.arange(len(path)-1))
+            else:
+                candidate_points.append([path[0], path[-1]])
+                candidate_path_indices.append([i, i])
+                candidate_point_indices.append([-2, -1])
+        candidate_points = np.concatenate(candidate_points)
+        candidate_path_indices = np.concatenate(candidate_path_indices)
+        candidate_point_indices = np.concatenate(candidate_point_indices)
+    
     print(f'{np.count_nonzero(loops)} / {loops.size} paths are loops')
     
     print('Optimizing...')
+    OPT_SUB_TIMING = False
+    
+    # def get_nn_tree(points, query_loc):
+    #     with time_block('build spatial index', enable=OPT_SUB_TIMING):
+    #         tree = BallTree(points)
+    #     with time_block('query spatial index', enable=OPT_SUB_TIMING):
+    #         return tree.query([query_loc], k=1, return_distance=False)[0, -1]
+    def get_nn_brute_force(points, query_loc):
+        with time_block('compute squared distances', enable=OPT_SUB_TIMING):
+            distances_sq = np.square(points - query_loc).sum(axis=-1)
+        with time_block('get min', enable=OPT_SUB_TIMING):
+            return distances_sq.argmin()
+    
     with time_block('optimize paths'):
         cur_loc = [0, 0]
         remaining = set(range(len(paths)))
-        path_mask = np.ones(len(paths), dtype=bool)
-        path_indices = np.arange(len(paths))
+        path_mask = np.ones(len(candidate_points), dtype=bool)
         new_paths = []
-        while len(remaining) > 0:
-            with time_block('build KDTree', enable=False):
-                tree = KDTree(start_points[path_mask])
-            next_index = tree.query([cur_loc], k=1, return_distance=False)[0, -1]
-            next_index = path_indices[path_mask][next_index]
+        for _ in tqdm(range(len(paths)), unit='paths', disable=OPT_SUB_TIMING):
+            with time_block('mask arrays', enable=OPT_SUB_TIMING):
+                candidate_points_masked = candidate_points[path_mask]
+                candidate_path_indices_masked = candidate_path_indices[path_mask]
+                candidate_point_indices_masked = candidate_point_indices[path_mask]
+            query_index = get_nn_brute_force(candidate_points_masked, cur_loc)
+            path_index = candidate_path_indices_masked[query_index]
+            meta = candidate_point_indices_masked[query_index]
             
-            remaining.remove(next_index)
-            path_mask[next_index] = False
-            new_paths.append(paths[next_index])
-            cur_loc = end_points[next_index]
-    print('Done')
-    
-    summarize_paths(new_paths)
+            remaining.remove(path_index)
+            with time_block('clear path_mask section', enable=OPT_SUB_TIMING):
+                path_mask[candidate_path_indices == path_index] = False
+            path = paths[path_index]
+            if meta == -2:
+                app_path = path
+            elif meta == -1:
+                app_path = path[::-1]
+            else:
+                with time_block('roll loop path', enable=OPT_SUB_TIMING):
+                    app_path = np.roll(path[:-1], -meta, axis=0)
+                    app_path = np.concatenate((app_path, app_path[:1]))  # close the loop
+            new_paths.append(app_path)
+            cur_loc = app_path[-1]
     
     with open(args.outfile, 'w') as f:
         f.write('IN;\n')
@@ -110,6 +153,15 @@ def main(args):
         f.write('PU;\n')
         f.write('SP0;\n')
         f.write('IN;\n')
+    print('Wrote output file')
+    
+    print()
+    print('=== AFTER: ===')
+    dist_after = summarize_paths(new_paths)
+    print()
+    
+    dist_ratio = dist_after / dist_before
+    print(f'Optimized is {100*dist_ratio:.1f}% of original total distance (~{1/dist_ratio:.1f}x as fast)')
 
 
 def parse_args():
