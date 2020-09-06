@@ -138,7 +138,12 @@ def main(args):
                 with time_block('roll loop path', enable=OPT_SUB_TIMING):
                     app_path = np.roll(path[:-1], -meta, axis=0)
                     app_path = np.concatenate((app_path, app_path[:1]))  # close the loop
-            new_paths.append(app_path)
+            if len(new_paths) > 0 and np.array_equal(new_paths[-1][-1], app_path[0]):
+                # the next path starts at the same spot as the previous ended at;
+                # extend the previous path instead of doing another pen up+down
+                new_paths[-1] = np.concatenate((new_paths[-1], app_path[1:]))
+            else:
+                new_paths.append(app_path)
             cur_loc = app_path[-1]
     
     with open(args.outfile, 'w') as f:
