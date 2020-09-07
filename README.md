@@ -1,3 +1,9 @@
 # HGPL plot optimizer
 
-[TODO]
+[Overview]
+
+## Usage
+
+```
+$ python3 optimize.py input-file.plt output-file.plt
+```
