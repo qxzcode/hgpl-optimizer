@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from pathlib import Path
 
 from util import *
 
@@ -162,8 +163,13 @@ def main(args):
                 new_paths.append(app_path)
             cur_loc = app_path[-1]
     
-    write_plt_file(args.outfile, new_paths)
-    print('Wrote output file')
+    if args.outfile is None:
+        suffix = Path(args.infile).suffix
+        output_file = args.infile[:len(args.infile)-len(suffix)] + '-opt' + suffix
+    else:
+        output_file = args.outfile
+    write_plt_file(output_file, new_paths)
+    print(f'Wrote output file: {output_file}')
     
     print()
     print('=== AFTER: ===')
@@ -177,8 +183,11 @@ def main(args):
 def parse_args():
     """Define, parse, and return the command-line arguments."""
     parser = ArgumentParser(description='Optimize HGPL plots')
-    parser.add_argument('infile', help='the input file to optimize')
-    parser.add_argument('outfile', help='the output file to write')
+    parser.add_argument('infile',
+                        help='the input file to optimize')
+    parser.add_argument('outfile', nargs='?',
+                        help='the output file to write (by default, '
+                             'appends "-opt" to the input file name)')
     
     return parser.parse_args()
 
