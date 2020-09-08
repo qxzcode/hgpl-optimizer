@@ -45,6 +45,22 @@ def summarize_paths(paths, plot=True):
     return total_dist
 
 
+def write_plt_file(file_path, paths):
+    """Write a set of paths to a .plt file."""
+    with open(file_path, 'w') as f:
+        f.write('IN;\n')
+        f.write('SP1;\n')
+        for path in paths:
+            f.write('\n')
+            f.write(f'PU{path[0][0]} {path[0][1]};\n')
+            for pt in path[1:]:
+                f.write(f'PD{pt[0]} {pt[1]};\n')
+        f.write('\n')
+        f.write('PU;\n')
+        f.write('SP0;\n')
+        f.write('IN;\n')
+
+
 def main(args):
     starts = set()
     with open(args.infile) as f:
@@ -146,18 +162,7 @@ def main(args):
                 new_paths.append(app_path)
             cur_loc = app_path[-1]
     
-    with open(args.outfile, 'w') as f:
-        f.write('IN;\n')
-        f.write('SP1;\n')
-        for path in new_paths:
-            f.write('\n')
-            f.write(f'PU{path[0][0]} {path[0][1]};\n')
-            for pt in path[1:]:
-                f.write(f'PD{pt[0]} {pt[1]};\n')
-        f.write('\n')
-        f.write('PU;\n')
-        f.write('SP0;\n')
-        f.write('IN;\n')
+    write_plt_file(args.outfile, new_paths)
     print('Wrote output file')
     
     print()
