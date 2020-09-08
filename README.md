@@ -7,3 +7,8 @@ These two scripts work to optimize a HPGL file to decrease the amount of time a 
 ```
 $ python3 optimize.py input-file.plt output-file.plt
 ```
+
+A plot will open showing the PU paths (black lines) and PD paths (color coded in order) which must be closed to proceed.
+Optimization runs and file generated.
+A new plot showing the optimized run will open.
+
