@@ -11,4 +11,4 @@ $ python3 optimize.py input-file.plt output-file.plt
 A plot will open showing the PU paths (black lines) and PD paths (color coded in order) which must be closed to proceed.
 Optimization runs and file generated.
 A new plot showing the optimized run will open.
-
+If no output file is specified and `x.plt` is the input file, `x-opt.plt` will be output.
